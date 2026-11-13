@@ -1,5 +1,6 @@
 package com.mobilerun.portal.service
 
+import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -19,6 +20,12 @@ class MobilerunNotificationListener : NotificationListenerService() {
         super.onListenerConnected()
         TriggerRuntime.initialize(this)
         Log.i(TAG, "Notification Listener Connected")
+    }
+
+    override fun onListenerDisconnected() {
+        // 系统因异常/超时断开 listener（MIUI 杀后台后常见），官方推荐的自动恢复路径
+        requestRebind(ComponentName(this, MobilerunNotificationListener::class.java))
+        Log.w(TAG, "Notification Listener disconnected, rebind requested")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
