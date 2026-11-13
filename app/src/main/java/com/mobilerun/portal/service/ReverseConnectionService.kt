@@ -106,6 +106,9 @@ class ReverseConnectionService : Service() {
         private const val ALERT_NOTIFICATION_ID = 2005
         private const val TOAST_DEBOUNCE_MS = 60_000L
         private const val CONNECTION_LOST_TIMEOUT_SEC = 30
+
+        /** wxpaw: slow retry cadence once the fast-retry budget is exhausted (self-hosted gateway). */
+        private const val SLOW_RETRY_DELAY_MS = 60_000L
         private const val SESSION_CHECK_TICK_MS = 6 * 60 * 60 * 1000L
         private val RECONNECT_TOKEN = Any()
         const val ACTION_DISCONNECT = "com.mobilerun.portal.action.REVERSE_DISCONNECT"
@@ -557,11 +560,16 @@ class ReverseConnectionService : Service() {
                 isReconnecting.set(false)
                 return
             }
-            Log.i(TAG, "No connection within the retry budget; stopping until Reconnect")
-            ConnectionStateManager.setState(ConnectionState.DISCONNECTED)
-            stopAfterTerminalState(ConnectionState.DISCONNECTED, connectionGeneration, gaveUp = true)
+            // wxpaw: a self-hosted gateway can be down for minutes (redeploys, network loss);
+            // the budget only caps fast retries, so fall back to slow retries instead of stopping.
+            Log.i(TAG, "Retry budget exhausted; slow-retrying every ${SLOW_RETRY_DELAY_MS}ms")
+            scheduleDelayedReconnect(connectionGeneration, SLOW_RETRY_DELAY_MS)
             return
         }
+        scheduleDelayedReconnect(connectionGeneration, delayMs)
+    }
+
+    private fun scheduleDelayedReconnect(connectionGeneration: Long, delayMs: Long) {
         webSocketGeneration.markReconnectScheduled(connectionGeneration)
 
         ConnectionStateManager.setState(ConnectionState.RECONNECTING)
